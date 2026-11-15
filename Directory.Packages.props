@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+	<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageVersion Include="Google.Apis.Auth" Version="1.78.0" />
+	<PackageVersion Include="Google.Apis.YouTube.v3" Version="1.78.0.4325" />
+	<PackageVersion Include="MSTest" Version="4.5.3" />
+	<PackageVersion Include="Spectre.Console" Version="0.57.2" />
+  </ItemGroup>
+</Project>

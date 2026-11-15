@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>utu</AssemblyName>
+    <RootNamespace>Utu</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>utu</ToolCommandName>
+    <PackageId>utu</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Simple command line YouTube uploader.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" />
+    <PackageReference Include="Google.Apis.YouTube.v3" />
+    <PackageReference Include="Spectre.Console" />
+  </ItemGroup>
+
+</Project>
