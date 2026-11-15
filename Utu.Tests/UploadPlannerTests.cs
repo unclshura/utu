@@ -25,6 +25,42 @@ public sealed class UploadPlannerTests
     }
 
     [TestMethod]
+        public void The_plan_uses_the_global_defaults()
+        {
+            using var folder = new TempFolder();
+            folder.WriteFile("a.mp4");
+
+            var config = TestConfig.With(new VideoEntry { File = "a.mp4", Title = "T" });
+            var global = new UtuConfig
+            {
+                Defaults = new VideoSettings { Description = "global", Tags = ["global"], Privacy = Privacy.Public },
+            };
+
+            var resolved = ResolvedConfiguration.Resolve(folder.Path, config, global, folder.Path);
+            var item = new UploadPlanner().CreatePlan(resolved).Items[0];
+
+            Assert.AreEqual(UploadAction.Upload, item.Action);
+            Assert.AreEqual("global", item.Settings!.Description);
+            CollectionAssert.AreEqual(new[] { "global" }, item.Settings.Tags!.ToArray());
+            Assert.AreEqual(Privacy.Public, item.Settings.Privacy);
+        }
+
+        [TestMethod]
+        public void The_plan_uses_the_folder_defaults_over_the_global_defaults()
+        {
+            using var folder = new TempFolder();
+            folder.WriteFile("a.mp4");
+
+            var config = TestConfig.WithDefaults(new VideoSettings { Description = "folder" }, new VideoEntry { File = "a.mp4", Title = "T" });
+            var global = new UtuConfig { Defaults = new VideoSettings { Description = "global" } };
+
+            var resolved = ResolvedConfiguration.Resolve(folder.Path, config, global, folder.Path);
+            var item = new UploadPlanner().CreatePlan(resolved).Items[0];
+
+            Assert.AreEqual("folder", item.Settings!.Description);
+        }
+
+        [TestMethod]
     public void A_missing_file_blocks_the_entry()
     {
         using var folder = new TempFolder();

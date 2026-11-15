@@ -28,7 +28,7 @@ public sealed class ConfigIOTests
             }
             """);
 
-        Assert.AreEqual("My channel", config.Channel.Name);
+        Assert.AreEqual("My channel", config.Channel!.Name);
         Assert.AreEqual("secret.json", config.Channel.ClientSecretsFile);
         Assert.AreEqual(2, config.Channel.ParallelUploads);
         Assert.AreEqual("Music", config.Defaults.Category);
@@ -91,7 +91,7 @@ public sealed class ConfigIOTests
 
         var roundTripped = ConfigIO.Parse(ConfigIO.Serialize(config));
 
-        Assert.AreEqual("Channel", roundTripped.Channel.Name);
+        Assert.AreEqual("Channel", roundTripped.Channel!.Name);
         Assert.AreEqual(VideoLicense.CreativeCommon, roundTripped.Defaults.License);
         var video = roundTripped.Videos[0];
         Assert.AreEqual("Title", video.Title);
@@ -105,11 +105,12 @@ public sealed class ConfigIOTests
     }
 
     [TestMethod]
-    public void Serialize_writes_placeholders_but_no_computed_properties()
+        public void Serialize_omits_unset_properties()
     {
         var json = ConfigIO.Serialize(new UtuConfig { Videos = [new VideoEntry { File = "a.mp4" }] });
 
-        StringAssert.Contains(json, "\"enabled\": null");
+            Assert.IsFalse(json.Contains("\"enabled\"", StringComparison.Ordinal), json);
+            Assert.IsFalse(json.Contains("\"channel\"", StringComparison.Ordinal), json);
         Assert.IsFalse(json.Contains("isEnabled", StringComparison.Ordinal), json);
         Assert.IsFalse(json.Contains("identity", StringComparison.OrdinalIgnoreCase), json);
     }

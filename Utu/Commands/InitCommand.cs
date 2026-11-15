@@ -33,6 +33,11 @@ public static class InitCommand
         ui.Info($"folder: {root}");
         ui.Info($"configuration: {configPath}");
 
+        var globalPath = ConfigurationLoader.FindGlobalConfig(configPath, line.ConfigFile);
+        ui.Info(globalPath is null
+            ? $"global: none; '{ConfigurationLoader.GlobalConfigPath()}' is used for channel and default settings"
+            : $"global: {globalPath} (channel and defaults are inherited from it)");
+
         UtuConfig? existing = null;
         if (File.Exists(configPath) && !line.Force)
         {
@@ -42,6 +47,18 @@ public static class InitCommand
 
         var result = ConfigInitializer.Create(root, existing, defaults);
         ConfigIO.Save(configPath, result.Config);
+
+        if (globalPath is not null)
+        {
+            var resolved = ResolvedConfiguration.Resolve(
+                root,
+                result.Config,
+                ConfigIO.Load(globalPath),
+                Path.GetDirectoryName(globalPath));
+
+            ui.Detail($"channel: {(resolved.Channel.Name ?? "(unnamed)")}, {resolved.Channel.ParallelUploads} parallel uploads");
+            ui.Detail($"token cache: {resolved.Channel.TokenCacheDirectory}");
+        }
 
         WriteEntries(ui, "Videos", result.Added, verboseOnly: false);
         WriteEntries(ui, "Already configured", result.Kept, verboseOnly: true);

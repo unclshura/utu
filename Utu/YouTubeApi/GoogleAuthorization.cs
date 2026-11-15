@@ -13,7 +13,7 @@ namespace Utu.YouTubeApi;
 /// <remarks>
 /// The OAuth client secrets are supplied by the user; no secrets are stored in
 /// the repository. The resulting token is cached in the folder configured by
-/// <see cref="ChannelConfig.TokenCacheDirectory" />.
+/// <see cref="ChannelSettings.TokenCacheDirectory" />.
 /// </remarks>
 public static class GoogleAuthorization
 {
@@ -25,20 +25,18 @@ public static class GoogleAuthorization
     ];
 
     /// <summary>Creates an authorized <see cref="YouTubeService" />.</summary>
-    /// <param name="channel">Channel settings, including the token cache folder.</param>
-    /// <param name="workingFolder">Folder that relative paths are resolved against.</param>
+    /// <param name="channel">Channel settings, including absolute token cache folder.</param>
     /// <param name="beforeInteractiveLogin">
     /// Called once when no cached token exists and a browser window is about to
     /// open.
     /// </param>
     /// <param name="cancellationToken">Cancels the authorization.</param>
     public static async Task<YouTubeService> CreateServiceAsync(
-        ChannelConfig channel,
-        string workingFolder,
+        ChannelSettings channel,
         Action<string>? beforeInteractiveLogin = null,
         CancellationToken cancellationToken = default)
     {
-        var credential = await AuthorizeAsync(channel, workingFolder, beforeInteractiveLogin, cancellationToken)
+        var credential = await AuthorizeAsync(channel, beforeInteractiveLogin, cancellationToken)
             .ConfigureAwait(false);
 
         return new YouTubeService(new BaseClientService.Initializer
@@ -50,12 +48,11 @@ public static class GoogleAuthorization
 
     /// <summary>Authorizes the user, reusing a cached token when one exists.</summary>
     public static async Task<UserCredential> AuthorizeAsync(
-        ChannelConfig channel,
-        string workingFolder,
+        ChannelSettings channel,
         Action<string>? beforeInteractiveLogin = null,
         CancellationToken cancellationToken = default)
     {
-        var secretsPath = PathResolver.Resolve(workingFolder, channel.ClientSecretsFile);
+        var secretsPath = channel.ClientSecretsFile;
         if (!File.Exists(secretsPath))
         {
             throw new UtuException(
@@ -64,7 +61,7 @@ public static class GoogleAuthorization
                 "download its JSON and store it there.");
         }
 
-        var tokenDirectory = PathResolver.Resolve(workingFolder, channel.TokenCacheDirectory);
+        var tokenDirectory = channel.TokenCacheDirectory;
         Directory.CreateDirectory(tokenDirectory);
 
         if (beforeInteractiveLogin is not null && !HasCachedToken(tokenDirectory))

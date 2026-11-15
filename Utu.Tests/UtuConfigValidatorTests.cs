@@ -19,7 +19,7 @@ public sealed class UtuConfigValidatorTests
     public void Parallel_uploads_must_be_at_least_one()
     {
         var config = Valid();
-        config.Channel.ParallelUploads = 0;
+            config.Channel!.ParallelUploads = 0;
 
         var result = UtuConfigValidator.Validate(config);
 
@@ -28,15 +28,17 @@ public sealed class UtuConfigValidatorTests
     }
 
     [TestMethod]
-    public void The_client_secrets_file_is_required()
+        public void A_blank_channel_value_is_inherited_rather_than_rejected()
     {
         var config = Valid();
-        config.Channel.ClientSecretsFile = " ";
+            config.Channel!.ClientSecretsFile = " ";
 
-        var result = UtuConfigValidator.Validate(config);
+            var result = UtuConfigValidator.Validate(config, Path.GetTempPath());
 
-        Assert.IsTrue(result.HasErrors);
-        Assert.AreEqual("channel.clientSecretsFile", result.Errors.Single().Setting);
+            Assert.IsFalse(result.HasErrors);
+            Assert.AreEqual(
+                Path.Combine(Path.GetFullPath(Path.GetTempPath()), ChannelSettings.DefaultClientSecretsFile),
+                ResolvedConfiguration.Resolve(Path.GetTempPath(), config).Channel.ClientSecretsFile);
     }
 
     [TestMethod]
@@ -68,7 +70,7 @@ public sealed class UtuConfigValidatorTests
     public void A_missing_channel_name_is_a_warning()
     {
         var config = Valid();
-        config.Channel.Name = null;
+            config.Channel!.Name = null;
 
         var result = UtuConfigValidator.Validate(config);
 
@@ -79,7 +81,7 @@ public sealed class UtuConfigValidatorTests
     private static UtuConfig Valid()
     {
         var config = TestConfig.With(TestConfig.Entry("a.mp4"));
-        config.Channel.ClientSecretsFile = "client_secret.json";
+        config.Channel!.ClientSecretsFile = "client_secret.json";
         return config;
     }
 }

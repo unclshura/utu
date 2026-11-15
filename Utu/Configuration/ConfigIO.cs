@@ -12,7 +12,7 @@ public static class ConfigIO
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
@@ -58,6 +58,10 @@ public static class ConfigIO
             throw new UtuException($"Cannot read {path}: {exception.Message}", 1, exception);
         }
     }
+
+    /// <summary>Reads a configuration file, returning <see langword="null" /> when it does not exist.</summary>
+    /// <exception cref="UtuException">The file is invalid.</exception>
+    public static UtuConfig? LoadOptional(string path) => File.Exists(path) ? Load(path) : null;
 
     /// <summary>Serializes a configuration document.</summary>
     public static string Serialize(UtuConfig config) =>

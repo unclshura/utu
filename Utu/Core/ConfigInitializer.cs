@@ -126,14 +126,10 @@ public static class ConfigInitializer
         Videos = [],
     };
 
+    // Only the values init was told about are written; everything else is
+    // inherited from the global configuration or from utu's built in defaults.
     private static VideoSettings CreateDefaults(InitOptions options) => new()
     {
         Category = options.Category,
-        Privacy = Privacy.Private,
-        License = VideoLicense.Youtube,
-        MadeForKids = false,
-        Embeddable = true,
-        ShowLikeCount = true,
-        AiUse = false,
     };
 }

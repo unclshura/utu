@@ -23,23 +23,31 @@ public sealed class UploadPlanner
 
     public UploadPlanner(UploadStateStore? state = null) => _state = state;
 
-    /// <summary>Builds the plan for <paramref name="config" />.</summary>
-    /// <param name="config">Loaded configuration.</param>
-    /// <param name="workingFolder">Folder that relative paths are resolved against.</param>
+    /// <summary>Builds the plan of a merged configuration.</summary>
+    /// <param name="config">Configuration after the layers have been merged.</param>
     /// <param name="options">Options of the current run.</param>
-    public UploadPlan CreatePlan(UtuConfig config, string workingFolder, UploadPlanOptions? options = null)
+    public UploadPlan CreatePlan(ResolvedConfiguration config, UploadPlanOptions? options = null)
     {
         var opts = options ?? new UploadPlanOptions();
         var items = new List<UploadPlanItem>();
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var entry in config.Videos ?? [])
+        foreach (var entry in config.Videos)
         {
-            items.Add(PlanEntry(entry, config.Defaults ?? new VideoSettings(), workingFolder, opts, seen));
+            items.Add(PlanEntry(entry, config.Defaults, config.WorkingFolder, opts, seen));
         }
 
         return new UploadPlan { Items = items };
     }
+
+    /// <summary>
+    /// Builds the plan of a folder configuration, without a global configuration.
+    /// </summary>
+    /// <param name="config">Loaded configuration.</param>
+    /// <param name="workingFolder">Folder that relative paths are resolved against.</param>
+    /// <param name="options">Options of the current run.</param>
+    public UploadPlan CreatePlan(UtuConfig config, string workingFolder, UploadPlanOptions? options = null) =>
+            CreatePlan(ResolvedConfiguration.Resolve(workingFolder, config), options);
 
     /// <summary>Matches a file against the <c>--only</c> filters.</summary>
     public static bool MatchesOnly(string file, IReadOnlyList<string> filters)

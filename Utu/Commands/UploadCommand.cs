@@ -13,18 +13,29 @@ public static class UploadCommand
     public static async Task<int> RunAsync(CommandLine line, ConsoleUi ui, CancellationToken cancellationToken)
     {
         var root = Path.GetFullPath(line.Folder);
-        var configPath = PathResolver.Resolve(root, line.ConfigFile ?? ConfigIO.DefaultFileName);
 
         ui.Heading("utu upload");
-        ui.Info($"configuration: {configPath}");
 
-        if (!File.Exists(configPath))
+        var loaded = ConfigurationLoader.Load(root, line.ConfigFile);
+        var config = ApplyOverrides(loaded.Resolved, line);
+
+        ui.Info($"configuration: {loaded.ConfigPath}");
+        ui.Info(loaded.GlobalPath is null
+            ? $"global: {ConfigurationLoader.GlobalConfigPath()} (not found, folder settings only)"
+            : $"global: {loaded.GlobalPath}");
+
+        if (ui.IsVerbose)
         {
-            throw new UtuException($"'{configPath}' does not exist; run 'utu init' first");
-        }
+            var defaults = SettingsResolver.Resolve(new VideoEntry(), config.Defaults);
 
-        var config = ConfigIO.Load(configPath);
-        ApplyOverrides(config, line);
+            ui.Detail($"channel: {config.Channel.Name ?? "(unnamed)"}, {config.Channel.ParallelUploads} parallel uploads");
+            ui.Detail($"secrets: {config.Channel.ClientSecretsFile}");
+            ui.Detail($"token cache: {config.Channel.TokenCacheDirectory}");
+            ui.Detail(
+                $"defaults: category={defaults.Category ?? "-"}, privacy={defaults.Privacy}, " +
+                $"license={defaults.License}, madeForKids={defaults.MadeForKids}, " +
+                $"description={(string.IsNullOrEmpty(defaults.Description) ? "-" : "set")}");
+        }
 
         var validation = UtuConfigValidator.Validate(config);
         ReportWriter.WriteValidation(ui, validation);
@@ -34,7 +45,7 @@ public static class UploadCommand
             return 1;
         }
 
-        var statePath = PathResolver.Resolve(root, config.Channel.StateFile);
+        var statePath = config.Channel.StateFile;
         var stateLoad = UploadStateStore.Load(statePath);
 
         if (stateLoad.Warning is { Length: > 0 } warning)
@@ -47,7 +58,6 @@ public static class UploadCommand
 
         var plan = new UploadPlanner(state).CreatePlan(
             config,
-            root,
             new UploadPlanOptions
             {
                 Force = line.Force,
@@ -77,10 +87,9 @@ public static class UploadCommand
         ui.Blank();
 
         using var service = await GoogleAuthorization.CreateServiceAsync(
-                config.Channel,
-                root,
-                tokenDirectory => ui.Info($"No cached token in '{tokenDirectory}'; opening the browser to sign in."),
-                cancellationToken)
+            config.Channel,
+            tokenDirectory => ui.Info($"No cached token in '{tokenDirectory}'; opening the browser to sign in."),
+            cancellationToken)
             .ConfigureAwait(false);
 
         var client = new YouTubeClient(service);
@@ -143,19 +152,22 @@ public static class UploadCommand
                 new PercentageColumn(),
                 new RemainingTimeColumn())
             .StartAsync(context => new UploadRunner(
-                    client,
-                    state,
-                    options,
-                    new ConsoleUploadObserver(ui, context))
+                client,
+                state,
+                options,
+                new ConsoleUploadObserver(ui, context))
                 .RunAsync(plan, cancellationToken))
             .ConfigureAwait(false);
     }
 
-    private static void ApplyOverrides(UtuConfig config, CommandLine line)
-    {
-        if (line.ClientSecrets is { Length: > 0 } secrets)
-        {
-            config.Channel.ClientSecretsFile = secrets;
-        }
-    }
+    private static ResolvedConfiguration ApplyOverrides(ResolvedConfiguration config, CommandLine line) =>
+        line.ClientSecrets is { Length: > 0 } secrets
+            ? config with
+            {
+                Channel = config.Channel with
+                {
+                    ClientSecretsFile = PathResolver.Resolve(config.WorkingFolder, secrets),
+                },
+            }
+            : config;
 }

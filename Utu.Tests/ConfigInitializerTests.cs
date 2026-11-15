@@ -93,7 +93,7 @@ public sealed class ConfigInitializerTests
     }
 
     [TestMethod]
-    public void New_videos_use_the_utu_defaults()
+        public void New_videos_only_set_the_category_so_the_rest_can_be_inherited()
     {
         using var folder = new TempFolder();
         folder.WriteFile("a.mp4");
@@ -102,12 +102,12 @@ public sealed class ConfigInitializerTests
 
         var defaults = result.Config.Defaults;
         Assert.AreEqual("Rock", defaults.Category);
-        Assert.AreEqual(Privacy.Private, defaults.Privacy);
-        Assert.AreEqual(VideoLicense.Youtube, defaults.License);
-        Assert.IsFalse(defaults.MadeForKids);
-        Assert.IsTrue(defaults.Embeddable);
-        Assert.IsTrue(defaults.ShowLikeCount);
-        Assert.IsFalse(defaults.AiUse);
+            Assert.IsNull(defaults.Privacy);
+            Assert.IsNull(defaults.License);
+            Assert.IsNull(defaults.MadeForKids);
+            Assert.IsNull(defaults.Embeddable);
+            Assert.IsNull(defaults.ShowLikeCount);
+            Assert.IsNull(defaults.AiUse);
     }
 
     [TestMethod]

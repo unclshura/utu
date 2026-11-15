@@ -1,8 +1,8 @@
 # utu
 
 `utu` uploads every `.mp4` of a folder to YouTube, using a colourful
-[Spectre.Console](https://spectreconsole.net) command line and a single `utu.json`
-configuration file.
+[Spectre.Console](https://spectreconsole.net) command line and layered `utu.json`
+configuration files.
 
 ```
 utu <command> [--option=<value>]
@@ -22,14 +22,72 @@ Common options: `--folder=<dir>`, `--config=<file>`, `--only=<pattern>` (repeata
 ```powershell
 # 1. Create an OAuth client: Google Cloud console -> APIs & services ->
 #    Credentials -> Create credentials -> OAuth client ID -> Desktop app.
-#    Download the JSON and save it as client_secret.json next to utu.json.
+#    Download the JSON and save it as %USERPROFILE%\.utu\client_secret.json
+#    (created by hand, next to the global utu.json).
 #    Enable "YouTube Data API v3" for the project.
 
+# 2. Describe the channel once in %USERPROFILE%\.utu\utu.json (see below).
 utu init --recursive      # writes utu.json, guesses titles, finds thumbnails
 # edit utu.json
 utu upload --dry-run      # review the plan
 utu upload                # upload
 ```
+
+## Layered configuration
+
+Settings come from three layers. The first layer that defines a value wins:
+
+| # | Layer | File |
+|---|-------|------|
+| 1 | the video entry | `<folder>/utu.json` |
+| 2 | the folder defaults | `<folder>/utu.json` (`defaults`) |
+| 3 | the global configuration | `%USERPROFILE%\.utu\utu.json` (`defaults` and `channel`) |
+| 4 | the built in values of `utu` | - |
+
+So one home folder holds the channel parameters, the secrets and everything that
+every video shares:
+
+```jsonc
+// %USERPROFILE%\.utu\utu.json
+{
+  "channel": {
+    "name": "My channel",
+    "clientSecretsFile": "client_secret.json",   // -> ~/.utu/client_secret.json
+    "tokenCacheDirectory": "auth",               // -> ~/.utu/auth
+    "parallelUploads": 3,
+    "resumeUploads": true
+  },
+  "defaults": {
+    "category": "Music",
+    "license": "youtube",
+    "embeddable": true,
+    "showLikeCount": true
+  }
+}
+```
+
+and a folder only repeats what differs:
+
+```jsonc
+// <folder>/utu.json
+{
+  "defaults": { "tags": ["album"] },
+  "videos": [
+    { "file": "Song.mp4", "title": "Song", "thumbnail": "Song.jpg" }
+  ]
+}
+```
+
+A few rules keep the layers predictable:
+
+- merging is per setting; lists (`tags`, `playlists`, `featuredPlaces`,
+  `collaboration`) and `localizations` are replaced as a whole, not concatenated,
+- a blank or missing value means "not defined here", so it is inherited,
+- relative paths are resolved against the folder of the file that defines them,
+  so `client_secret.json` lives next to the `utu.json` that names it,
+- `--config=<file>` names an exact file that is used as is, without the global
+  layer,
+- `UTU_HOME` moves the global folder (handy for tests, see below).
 
 ## `utu.json`
 
@@ -69,9 +127,10 @@ utu upload                # upload
 }
 ```
 
-Every setting is optional per video and falls back to `defaults`. An entry with
-`"enabled": false` is skipped. Set `"madeForKids": true` only when the video is
-made for kids; it changes which Studio settings apply.
+Every setting is optional per video and falls back to `defaults` of the folder and
+then to the global configuration. An entry with `"enabled": false` is skipped. Set
+`"madeForKids": true` only when the video is made for kids; it changes which
+Studio settings apply.
 
 ## Upload behaviour
 
