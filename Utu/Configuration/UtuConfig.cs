@@ -17,8 +17,11 @@ public sealed class UtuConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ChannelConfig? Channel { get; set; }
 
-    /// <summary>Settings inherited by every entry of <see cref="Videos" />.</summary>
-    public VideoSettings Defaults { get; set; } = new();
+    /// <summary>
+    /// Settings inherited by every entry of <see cref="Videos" />, plus the
+    /// settings that only describe the folder as a whole.
+    /// </summary>
+    public DefaultsSettings Defaults { get; set; } = new();
 
     /// <summary>The videos to upload. Only a folder configuration has videos.</summary>
     public List<VideoEntry> Videos { get; set; } = [];

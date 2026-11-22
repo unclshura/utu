@@ -10,13 +10,13 @@ public sealed class ResolvedConfigurationTests
     {
         var folder = new UtuConfig
         {
-            Defaults = new VideoSettings { Category = "folder", Privacy = Privacy.Unlisted, License = VideoLicense.CreativeCommon },
+            Defaults = new DefaultsSettings { Category = "folder", Privacy = Privacy.Unlisted, License = VideoLicense.CreativeCommon },
             Videos = [new VideoEntry { File = "a.mp4", Category = "entry" }],
         };
 
         var global = new UtuConfig
         {
-            Defaults = new VideoSettings
+            Defaults = new DefaultsSettings
             {
                 Category = "global",
                 Privacy = Privacy.Public,
@@ -53,7 +53,7 @@ public sealed class ResolvedConfigurationTests
     [TestMethod]
     public void Without_a_global_configuration_the_folder_values_are_used()
     {
-        var folder = TestConfig.WithDefaults(new VideoSettings { Description = "folder" }, TestConfig.Entry("a.mp4"));
+        var folder = TestConfig.WithDefaults(new DefaultsSettings { Description = "folder" }, TestConfig.Entry("a.mp4"));
 
         var resolved = ResolvedConfiguration.Resolve(".", folder);
 
@@ -65,7 +65,7 @@ public sealed class ResolvedConfigurationTests
     [TestMethod]
     public void The_global_thumbnail_is_resolved_against_the_global_folder()
     {
-        var global = new UtuConfig { Defaults = new VideoSettings { Thumbnail = "cover.jpg" } };
+        var global = new UtuConfig { Defaults = new DefaultsSettings { Thumbnail = "cover.jpg" } };
 
         var resolved = ResolvedConfiguration.Resolve(
             Path.GetTempPath(),
@@ -79,6 +79,19 @@ public sealed class ResolvedConfigurationTests
     }
 
     [TestMethod]
+    public void The_publish_schedule_is_layered_like_the_other_defaults()
+    {
+        var global = new UtuConfig { Defaults = new DefaultsSettings { PublishSchedule = "0 3 * * *" } };
+        var folder = new UtuConfig { Defaults = new DefaultsSettings { PublishSchedule = "0 9 * * *" } };
+        var blank = new UtuConfig { Defaults = new DefaultsSettings { PublishSchedule = string.Empty } };
+
+        Assert.AreEqual("0 9 * * *", ResolvedConfiguration.Resolve(".", folder, global).PublishSchedule);
+        Assert.AreEqual("0 3 * * *", ResolvedConfiguration.Resolve(".", new UtuConfig(), global).PublishSchedule);
+        Assert.AreEqual("0 3 * * *", ResolvedConfiguration.Resolve(".", blank, global).PublishSchedule);
+        Assert.IsNull(ResolvedConfiguration.Resolve(".", new UtuConfig()).PublishSchedule);
+    }
+
+    [TestMethod]
     public void The_working_folder_is_made_absolute()
     {
         var resolved = ResolvedConfiguration.Resolve(".", new UtuConfig());
@@ -89,7 +102,7 @@ public sealed class ResolvedConfigurationTests
     [TestMethod]
     public void A_null_folder_configuration_is_treated_as_empty()
     {
-        var global = new UtuConfig { Defaults = new VideoSettings { Category = "global" } };
+        var global = new UtuConfig { Defaults = new DefaultsSettings { Category = "global" } };
 
         var resolved = ResolvedConfiguration.Resolve(".", null, global);
 
@@ -191,7 +204,22 @@ public sealed class ChannelSettingsTests
 
         Assert.AreEqual(@"C:\Users\someone\.utu\global.json", channel.ClientSecretsFile);
         Assert.AreEqual("owner", channel.User);
-        Assert.AreEqual(@"C:\work\.utu\auth", channel.TokenCacheDirectory);
+        Assert.AreEqual(@"C:\Users\someone\.utu\auth", channel.TokenCacheDirectory);
+    }
+
+    [TestMethod]
+    public void The_built_in_paths_live_in_the_utu_folder_of_the_user()
+    {
+        var channel = ChannelSettings.Resolve(
+            null,
+            @"C:\work",
+            null,
+            null,
+            @"C:\Users\someone\.utu");
+
+        Assert.AreEqual(@"C:\Users\someone\.utu\client_secrets.json", channel.ClientSecretsFile);
+        Assert.AreEqual(@"C:\Users\someone\.utu\auth", channel.TokenCacheDirectory);
+        Assert.AreEqual(@"C:\work\.utu\state.json", channel.StateFile);
     }
 }
 
@@ -251,6 +279,23 @@ public sealed class ConfigurationLoaderTests
         Assert.IsNull(loaded.GlobalPath);
         Assert.IsNull(loaded.GlobalFolder);
         Assert.AreEqual(folder.Path, loaded.Resolved.WorkingFolder);
+    }
+
+    [TestMethod]
+    public void The_built_in_paths_live_in_the_utu_folder_of_the_user()
+    {
+        using var folder = new TempFolder();
+        var utuFolder = folder.CreateDirectory(".utu");
+        folder.WriteFile(ConfigIO.DefaultFileName, "{}");
+
+        var loaded = ConfigurationLoader.Load(folder.Path, homeFolder: folder.Path, overrideFolder: utuFolder);
+
+        Assert.IsNull(loaded.GlobalPath);
+        Assert.AreEqual(Path.Combine(utuFolder, "client_secrets.json"), loaded.Resolved.Channel.ClientSecretsFile);
+        Assert.AreEqual(Path.Combine(utuFolder, "auth"), loaded.Resolved.Channel.TokenCacheDirectory);
+        Assert.AreEqual(
+            Path.Combine(folder.Path, ".utu", "state.json"),
+            loaded.Resolved.Channel.StateFile);
     }
 
     [TestMethod]

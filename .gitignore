@@ -361,3 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# utu: OAuth client secrets and cached credentials must never be committed
+client_secrets.json
+client_secrets.json.protected
+client_secret.json
+client_secret.json.protected

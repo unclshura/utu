@@ -28,6 +28,13 @@ public sealed record ResolvedConfiguration
     /// <summary>The videos of the folder configuration.</summary>
     public IReadOnlyList<VideoEntry> Videos { get; init; } = [];
 
+    /// <summary>
+    /// Crontab expression that spreads the publication times over the videos,
+    /// taken from the <c>defaults</c> of the folder or of the global
+    /// configuration. Only <c>utu init</c> uses it.
+    /// </summary>
+    public string? PublishSchedule { get; init; }
+
     /// <summary>Whether a global configuration was merged in.</summary>
     public bool HasGlobal { get; init; }
 
@@ -36,11 +43,15 @@ public sealed record ResolvedConfiguration
     /// <param name="folder">The folder configuration, or <see langword="null" />.</param>
     /// <param name="global">The global configuration, or <see langword="null" />.</param>
     /// <param name="globalFolder">Folder of <paramref name="global" />.</param>
+    /// <param name="homeFolder">
+    /// The <c>.utu</c> folder of the user; built in paths are relative to it.
+    /// </param>
     public static ResolvedConfiguration Resolve(
         string workingFolder,
         UtuConfig? folder,
         UtuConfig? global = null,
-        string? globalFolder = null)
+        string? globalFolder = null,
+        string? homeFolder = null)
     {
         var root = Path.GetFullPath(workingFolder);
         var globalRoot = globalFolder is null ? root : Path.GetFullPath(globalFolder);
@@ -48,15 +59,20 @@ public sealed record ResolvedConfiguration
         return new ResolvedConfiguration
         {
             WorkingFolder = root,
-            Channel = ChannelSettings.Resolve(folder?.Channel, root, global?.Channel, globalRoot),
-            Defaults = (folder?.Defaults ?? new VideoSettings()).WithFallback(
+            Channel = ChannelSettings.Resolve(folder?.Channel, root, global?.Channel, globalRoot, homeFolder),
+            Defaults = (folder?.Defaults ?? new DefaultsSettings()).WithFallback(
                 global?.Defaults is { } globalDefaults
                     ? ResolveRelativePaths(globalDefaults, globalRoot)
                     : null),
+            PublishSchedule = FirstSet(folder?.Defaults?.PublishSchedule, global?.Defaults?.PublishSchedule),
             Videos = folder?.Videos ?? [],
             HasGlobal = global is not null,
         };
     }
+
+    // An empty value means "inherit", like everywhere else in the configuration.
+    private static string? FirstSet(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static VideoSettings ResolveRelativePaths(VideoSettings settings, string folder)
     {

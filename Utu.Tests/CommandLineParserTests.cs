@@ -28,6 +28,7 @@ public sealed class CommandLineParserTests
     public void Parses_commands_case_insensitively()
     {
         Assert.AreEqual(UtuCommand.Init, CommandLineParser.Parse(["Init"]).Command);
+        Assert.AreEqual(UtuCommand.Schedule, CommandLineParser.Parse(["SCHEDULE"]).Command);
         Assert.AreEqual(UtuCommand.Upload, CommandLineParser.Parse(["UPLOAD"]).Command);
     }
 
@@ -131,6 +132,7 @@ public sealed class CommandLineParserTests
     public void ParseCommand_maps_the_known_commands()
     {
         Assert.AreEqual(UtuCommand.Init, CommandLineParser.ParseCommand("init"));
+        Assert.AreEqual(UtuCommand.Schedule, CommandLineParser.ParseCommand("schedule"));
         Assert.AreEqual(UtuCommand.Upload, CommandLineParser.ParseCommand("upload"));
         Assert.AreEqual(UtuCommand.Help, CommandLineParser.ParseCommand("help"));
     }

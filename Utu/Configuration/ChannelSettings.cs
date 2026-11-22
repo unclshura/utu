@@ -12,10 +12,10 @@ namespace Utu.Configuration;
 public sealed record ChannelSettings
 {
     /// <summary>OAuth client secrets used when no configuration names a file.</summary>
-    public const string DefaultClientSecretsFile = "client_secret.json";
+    public const string DefaultClientSecretsFile = "client_secrets.json";
 
     /// <summary>Token cache folder used when no configuration names one.</summary>
-    public const string DefaultTokenCacheDirectory = ".utu/auth";
+    public const string DefaultTokenCacheDirectory = "auth";
 
     /// <summary>State file used when no configuration names one.</summary>
     public const string DefaultStateFile = ".utu/state.json";
@@ -30,6 +30,10 @@ public sealed record ChannelSettings
     public string? Name { get; init; }
 
     /// <summary>Absolute path of the OAuth client secrets.</summary>
+    /// <remarks>
+    /// This is the path the user stores the downloaded secrets at; utu reads
+    /// the protected version of it. See <c>ClientSecretsFile</c>.
+    /// </remarks>
     public string ClientSecretsFile { get; init; } = DefaultClientSecretsFile;
 
     /// <summary>Absolute path of the token cache folder.</summary>
@@ -55,19 +59,26 @@ public sealed record ChannelSettings
     /// <param name="workingFolder">Folder of the folder configuration.</param>
     /// <param name="global">Channel section of the global configuration.</param>
     /// <param name="globalFolder">Folder of the global configuration.</param>
+    /// <param name="homeFolder">
+    /// The <c>.utu</c> folder of the user that built in paths are relative to.
+    /// Defaults to <paramref name="globalFolder" />, then to
+    /// <paramref name="workingFolder" />.
+    /// </param>
     public static ChannelSettings Resolve(
         ChannelConfig? folder,
         string workingFolder,
         ChannelConfig? global = null,
-        string? globalFolder = null)
+        string? globalFolder = null,
+        string? homeFolder = null)
     {
-        var home = globalFolder ?? workingFolder;
+        var home = homeFolder ?? globalFolder ?? workingFolder;
 
         string PathSetting(
             string? local,
             string root,
             string? inherited,
             string inheritedRoot,
+            string fallbackRoot,
             string fallback)
         {
             if (!string.IsNullOrWhiteSpace(local))
@@ -77,16 +88,17 @@ public sealed record ChannelSettings
 
             return !string.IsNullOrWhiteSpace(inherited)
                 ? Core.PathResolver.Resolve(inheritedRoot, inherited)
-                : Core.PathResolver.Resolve(root, fallback);
+                : Core.PathResolver.Resolve(fallbackRoot, fallback);
         }
 
         return new ChannelSettings
         {
-            Name = folder?.Name ?? global?.Name,
+            Name = FirstSet(folder?.Name, global?.Name),
             ClientSecretsFile = PathSetting(
                 folder?.ClientSecretsFile,
                 workingFolder,
                 global?.ClientSecretsFile,
+                home,
                 home,
                 DefaultClientSecretsFile),
             TokenCacheDirectory = PathSetting(
@@ -94,12 +106,14 @@ public sealed record ChannelSettings
                 workingFolder,
                 global?.TokenCacheDirectory,
                 home,
+                home,
                 DefaultTokenCacheDirectory),
             StateFile = PathSetting(
                 folder?.StateFile,
                 workingFolder,
                 global?.StateFile,
                 home,
+                workingFolder,
                 DefaultStateFile),
             User = FirstSet(folder?.User, global?.User) ?? DefaultUser,
             ParallelUploads = folder?.ParallelUploads ?? global?.ParallelUploads ?? DefaultParallelUploads,

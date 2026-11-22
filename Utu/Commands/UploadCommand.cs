@@ -19,6 +19,10 @@ public static class UploadCommand
         var loaded = ConfigurationLoader.Load(root, line.ConfigFile);
         var config = ApplyOverrides(loaded.Resolved, line);
 
+        // The plain secrets file is protected on first use; only the protected version
+        // is read afterwards.
+        var secretsPath = ClientSecretsFile.EnsureProtected(config.Channel.ClientSecretsFile);
+
         ui.Info($"configuration: {loaded.ConfigPath}");
         ui.Info(loaded.GlobalPath is null
             ? $"global: {ConfigurationLoader.GlobalConfigPath()} (not found, folder settings only)"
@@ -29,7 +33,7 @@ public static class UploadCommand
             var defaults = SettingsResolver.Resolve(new VideoEntry(), config.Defaults);
 
             ui.Detail($"channel: {config.Channel.Name ?? "(unnamed)"}, {config.Channel.ParallelUploads} parallel uploads");
-            ui.Detail($"secrets: {config.Channel.ClientSecretsFile}");
+            ui.Detail($"secrets: {secretsPath}{(File.Exists(secretsPath) ? "" : " (missing)")}");
             ui.Detail($"token cache: {config.Channel.TokenCacheDirectory}");
             ui.Detail(
                 $"defaults: category={defaults.Category ?? "-"}, privacy={defaults.Privacy}, " +

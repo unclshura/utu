@@ -33,7 +33,7 @@ public sealed class UploadPlannerTests
             var config = TestConfig.With(new VideoEntry { File = "a.mp4", Title = "T" });
             var global = new UtuConfig
             {
-                Defaults = new VideoSettings { Description = "global", Tags = ["global"], Privacy = Privacy.Public },
+                Defaults = new DefaultsSettings { Description = "global", Tags = ["global"], Privacy = Privacy.Public },
             };
 
             var resolved = ResolvedConfiguration.Resolve(folder.Path, config, global, folder.Path);
@@ -51,8 +51,8 @@ public sealed class UploadPlannerTests
             using var folder = new TempFolder();
             folder.WriteFile("a.mp4");
 
-            var config = TestConfig.WithDefaults(new VideoSettings { Description = "folder" }, new VideoEntry { File = "a.mp4", Title = "T" });
-            var global = new UtuConfig { Defaults = new VideoSettings { Description = "global" } };
+            var config = TestConfig.WithDefaults(new DefaultsSettings { Description = "folder" }, new VideoEntry { File = "a.mp4", Title = "T" });
+            var global = new UtuConfig { Defaults = new DefaultsSettings { Description = "global" } };
 
             var resolved = ResolvedConfiguration.Resolve(folder.Path, config, global, folder.Path);
             var item = new UploadPlanner().CreatePlan(resolved).Items[0];
@@ -131,7 +131,7 @@ public sealed class UploadPlannerTests
     {
         using var folder = new TempFolder();
         folder.WriteFile("a.mp4");
-        var defaults = new VideoSettings
+        var defaults = new DefaultsSettings
         {
             Category = "Music",
             Description = "From defaults",

@@ -65,7 +65,7 @@ internal static class TestConfig
             Videos = [.. entries],
         };
 
-    public static UtuConfig WithDefaults(VideoSettings defaults, params VideoEntry[] entries) =>
+    public static UtuConfig WithDefaults(DefaultsSettings defaults, params VideoEntry[] entries) =>
         new()
         {
             Channel = new ChannelConfig { Name = "Test channel" },

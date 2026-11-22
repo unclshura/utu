@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Utu.Configuration;
 using Utu.Core;
 
@@ -93,7 +94,7 @@ public sealed class ConfigInitializerTests
     }
 
     [TestMethod]
-        public void New_videos_only_set_the_category_so_the_rest_can_be_inherited()
+    public void New_videos_only_set_the_category_so_the_rest_can_be_inherited()
     {
         using var folder = new TempFolder();
         folder.WriteFile("a.mp4");
@@ -102,12 +103,99 @@ public sealed class ConfigInitializerTests
 
         var defaults = result.Config.Defaults;
         Assert.AreEqual("Rock", defaults.Category);
-            Assert.IsNull(defaults.Privacy);
-            Assert.IsNull(defaults.License);
-            Assert.IsNull(defaults.MadeForKids);
-            Assert.IsNull(defaults.Embeddable);
-            Assert.IsNull(defaults.ShowLikeCount);
-            Assert.IsNull(defaults.AiUse);
+        Assert.IsNull(defaults.Privacy);
+        Assert.IsNull(defaults.License);
+        Assert.IsNull(defaults.MadeForKids);
+        Assert.IsNull(defaults.Embeddable);
+        Assert.IsNull(defaults.ShowLikeCount);
+        Assert.IsNull(defaults.AiUse);
+    }
+
+    [TestMethod]
+    public void Without_a_category_every_default_stays_a_placeholder()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+
+        var result = ConfigInitializer.Create(folder.Path, existing: null);
+
+        Assert.IsNull(result.Config.Defaults.Category);
+        Assert.IsTrue(IsEmpty(result.Config.Defaults), "a default has a value");
+    }
+
+    [TestMethod]
+    public void The_written_configuration_names_every_setting_as_a_placeholder()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+        var path = folder["utu.json"];
+
+        ConfigIO.SaveWithPlaceholders(path, ConfigInitializer.Create(folder.Path, existing: null).Config);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var defaults = document.RootElement.GetProperty("defaults");
+        var written = defaults.EnumerateObject().ToDictionary(property => property.Name, property => property.Value);
+
+        var missing = SettingNames<DefaultsSettings>().Where(name => !written.ContainsKey(name)).ToList();
+        Assert.AreEqual(0, missing.Count, $"the placeholders lack: {string.Join(", ", missing)}");
+
+        foreach (var (name, value) in written)
+        {
+            Assert.AreEqual(JsonValueKind.Null, value.ValueKind, $"'{name}' is not a placeholder");
+        }
+    }
+
+    [TestMethod]
+    public void The_category_given_to_init_fills_its_placeholder()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+        var path = folder["utu.json"];
+
+        var result = ConfigInitializer.Create(folder.Path, existing: null, new InitOptions { Category = "Rock" });
+        ConfigIO.SaveWithPlaceholders(path, result.Config);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var category = document.RootElement.GetProperty("defaults").GetProperty("category");
+
+        Assert.AreEqual(JsonValueKind.String, category.ValueKind);
+        Assert.AreEqual("Rock", category.GetString());
+    }
+
+    [TestMethod]
+    public void The_written_videos_carry_no_placeholders()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+        folder.WriteFile("a.jpg");
+        var path = folder["utu.json"];
+
+        ConfigIO.SaveWithPlaceholders(path, ConfigInitializer.Create(folder.Path, existing: null).Config);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var video = document.RootElement.GetProperty("videos")[0];
+        var written = video.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToArray();
+
+        CollectionAssert.AreEqual(new[] { "file", "thumbnail", "title" }, written);
+    }
+
+    [TestMethod]
+    public void The_placeholders_inherit_the_built_in_values()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+        var path = folder["utu.json"];
+
+        ConfigIO.SaveWithPlaceholders(path, ConfigInitializer.Create(folder.Path, existing: null).Config);
+
+        var resolved = ResolvedConfiguration.Resolve(folder.Path, ConfigIO.Load(path));
+        var builtIn = SettingsResolver.Resolve(new VideoEntry(), defaults: null);
+
+        Assert.IsNull(resolved.Defaults.Category);
+        Assert.AreEqual(Privacy.Private, SettingsResolver.Resolve(new VideoEntry(), resolved.Defaults).Privacy);
+        Assert.AreEqual(VideoLicense.Youtube, SettingsResolver.Resolve(new VideoEntry(), resolved.Defaults).License);
+        Assert.AreEqual(builtIn.MadeForKids, SettingsResolver.Resolve(new VideoEntry(), resolved.Defaults).MadeForKids);
+        Assert.AreEqual(builtIn.Embeddable, SettingsResolver.Resolve(new VideoEntry(), resolved.Defaults).Embeddable);
     }
 
     [TestMethod]
@@ -116,7 +204,7 @@ public sealed class ConfigInitializerTests
         using var folder = new TempFolder();
         folder.WriteFile("a.mp4");
         var existing = TestConfig.WithDefaults(
-            new VideoSettings { Category = "Music", Privacy = Privacy.Unlisted },
+            new DefaultsSettings { Category = "Music", Privacy = Privacy.Unlisted },
             new VideoEntry { File = "a.mp4", Title = "T" });
 
         var result = ConfigInitializer.Create(folder.Path, existing, new InitOptions { Category = "Rock" });
@@ -154,4 +242,104 @@ public sealed class ConfigInitializerTests
 
         Assert.AreEqual(VideoMetadataFactory.MaxTitleLength, title.Length);
     }
+
+    [TestMethod]
+    public void A_publish_schedule_spreads_the_publication_times_over_the_videos()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("b.mp4");
+        folder.WriteFile("a.mp4");
+        folder.WriteFile("c.mp4");
+
+        var now = new DateTimeOffset(2024, 1, 1, 10, 30, 45, TimeSpan.Zero);
+        var result = ConfigInitializer.Create(
+            folder.Path,
+            existing: null,
+            new InitOptions { PublishSchedule = "0 * * * *" },
+            now);
+
+        var expected = CronSchedule
+            .Parse("0 * * * *", TimeZoneInfo.Local)
+            .Occurrences(now)
+            .Take(3)
+            .Select(moment => (DateTimeOffset?)moment)
+            .ToList();
+
+        CollectionAssert.AreEqual(
+            new[] { "a.mp4", "b.mp4", "c.mp4" },
+            result.Config.Videos.Select(entry => entry.File).ToArray());
+
+        CollectionAssert.AreEqual(expected, result.Config.Videos.Select(entry => entry.PublishAt).ToList());
+    }
+
+    [TestMethod]
+    public void Without_a_publish_schedule_nothing_is_scheduled()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+
+        var result = ConfigInitializer.Create(folder.Path, existing: null);
+
+        Assert.IsNull(result.Config.Videos[0].PublishAt, "a video without a schedule");
+    }
+
+    [TestMethod]
+    public void A_video_that_already_has_a_publication_time_keeps_it()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+        folder.WriteFile("b.mp4");
+
+        var fixedTime = new DateTimeOffset(2024, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        var existing = TestConfig.With(new VideoEntry { File = "a.mp4", Title = "A", PublishAt = fixedTime });
+
+        var result = ConfigInitializer.Create(
+            folder.Path,
+            existing,
+            new InitOptions { PublishSchedule = "@daily" },
+            new DateTimeOffset(2024, 1, 1, 10, 0, 0, TimeSpan.Zero));
+
+        Assert.AreEqual(fixedTime, result.Config.Videos[0].PublishAt, "the time of an existing video");
+        Assert.IsNotNull(result.Config.Videos[1].PublishAt, "a video that has none");
+    }
+
+    [TestMethod]
+    public void An_invalid_publish_schedule_is_reported()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+
+        var exception = Assert.ThrowsExactly<UtuException>(() => ConfigInitializer.Create(
+            folder.Path,
+            existing: null,
+            new InitOptions { PublishSchedule = "every hour" }));
+
+        Assert.AreEqual(2, exception.ExitCode);
+        StringAssert.Contains(exception.Message, "crontab");
+    }
+
+    [TestMethod]
+    public void A_publish_schedule_that_never_matches_is_reported()
+    {
+        using var folder = new TempFolder();
+        folder.WriteFile("a.mp4");
+
+        var exception = Assert.ThrowsExactly<UtuException>(() => ConfigInitializer.Create(
+            folder.Path,
+            existing: null,
+            new InitOptions { PublishSchedule = "0 0 30 2 *" }));
+
+        Assert.AreEqual(2, exception.ExitCode);
+        StringAssert.Contains(exception.Message, "0 0 30 2 *");
+    }
+
+    private static IEnumerable<string> SettingNames<T>() =>
+        typeof(T)
+            .GetProperties()
+            .Select(property => JsonNamingPolicy.CamelCase.ConvertName(property.Name));
+
+    private static bool IsEmpty(VideoSettings settings) =>
+        typeof(VideoSettings)
+            .GetProperties()
+            .All(property => property.GetValue(settings) is null);
 }

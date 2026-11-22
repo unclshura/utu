@@ -9,8 +9,15 @@ public sealed record InitOptions
     /// <summary>Search sub directories too.</summary>
     public bool Recursive { get; init; }
 
-    /// <summary>Category of the videos.</summary>
-    public string Category { get; init; } = "Music";
+    /// <summary>Category of the videos; <see langword="null" /> leaves it unset.</summary>
+    public string? Category { get; init; }
+
+    /// <summary>
+    /// Crontab expression that spreads the publication times over the videos.
+    /// An empty or missing value leaves <see cref="VideoSettings.PublishAt" />
+    /// unset, so nothing is scheduled.
+    /// </summary>
+    public string? PublishSchedule { get; init; }
 
     /// <summary>Replace an existing configuration instead of adding to it.</summary>
     public bool Force { get; init; }
@@ -43,7 +50,17 @@ public static class ConfigInitializer
     /// Creates the configuration for <paramref name="folder" />. An existing
     /// configuration is extended, unless <see cref="InitOptions.Force" /> is set.
     /// </summary>
-    public static InitResult Create(string folder, UtuConfig? existing, InitOptions? options = null)
+    /// <param name="folder">Folder that holds the videos.</param>
+    /// <param name="existing">Configuration to extend, or <see langword="null" />.</param>
+    /// <param name="options">Settings of the command.</param>
+    /// <param name="now">
+    /// Moment the publication times are counted from; the current time by default.
+    /// </param>
+    public static InitResult Create(
+        string folder,
+        UtuConfig? existing,
+        InitOptions? options = null,
+        DateTimeOffset? now = null)
     {
         options ??= new InitOptions();
 
@@ -100,6 +117,8 @@ public static class ConfigInitializer
 
         config.Videos.Sort((left, right) => string.Compare(left.File, right.File, StringComparison.OrdinalIgnoreCase));
 
+        PublishScheduler.Fill(config.Videos, options.PublishSchedule, now ?? DateTimeOffset.Now);
+
         return new InitResult(config, added, kept, missing);
     }
 
@@ -126,9 +145,10 @@ public static class ConfigInitializer
         Videos = [],
     };
 
-    // Only the values init was told about are written; everything else is
-    // inherited from the global configuration or from utu's built in defaults.
-    private static VideoSettings CreateDefaults(InitOptions options) => new()
+    // Only the values init was told about are written; everything else is a
+    // placeholder that inherits from the folder defaults, the global
+    // configuration or the built in values of utu.
+    private static DefaultsSettings CreateDefaults(InitOptions options) => new()
     {
         Category = options.Category,
     };

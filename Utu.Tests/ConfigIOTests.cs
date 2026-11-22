@@ -71,7 +71,7 @@ public sealed class ConfigIOTests
         var config = new UtuConfig
         {
             Channel = new ChannelConfig { Name = "Channel", ParallelUploads = 5 },
-            Defaults = new VideoSettings { Category = "Music", License = VideoLicense.CreativeCommon },
+            Defaults = new DefaultsSettings { Category = "Music", License = VideoLicense.CreativeCommon },
             Videos =
             [
                 new VideoEntry
@@ -118,7 +118,7 @@ public sealed class ConfigIOTests
     [TestMethod]
     public void Enums_are_written_in_camel_case()
     {
-        var json = ConfigIO.Serialize(new UtuConfig { Defaults = new VideoSettings { Privacy = Privacy.Unlisted } });
+        var json = ConfigIO.Serialize(new UtuConfig { Defaults = new DefaultsSettings { Privacy = Privacy.Unlisted } });
 
         StringAssert.Contains(json, "\"unlisted\"");
     }
@@ -156,5 +156,23 @@ public sealed class ConfigIOTests
     {
         Assert.AreEqual(JsonNamingPolicy.CamelCase, ConfigIO.Options.PropertyNamingPolicy);
         Assert.AreEqual("utu.json", ConfigIO.DefaultFileName);
+    }
+
+    [TestMethod]
+    public void The_defaults_may_carry_a_publish_schedule()
+    {
+        var config = ConfigIO.Parse("{ \"defaults\": { \"publishSchedule\": \"0 3 * * *\" } }");
+
+        Assert.AreEqual("0 3 * * *", config.Defaults.PublishSchedule);
+    }
+
+    [TestMethod]
+    public void A_video_entry_may_not_carry_a_publish_schedule()
+    {
+        var exception = Assert.ThrowsExactly<UtuException>(() => ConfigIO.Parse(
+            "{ \"videos\": [ { \"file\": \"a.mp4\", \"publishSchedule\": \"0 3 * * *\" } ] }"));
+
+        Assert.AreEqual(2, exception.ExitCode);
+        StringAssert.Contains(exception.Message, "publishSchedule");
     }
 }

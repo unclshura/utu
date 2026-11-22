@@ -136,6 +136,10 @@ public static class CommandLineParser
     {
         "help" => UtuCommand.Help,
         "init" => UtuCommand.Init,
+        "schedule" => UtuCommand.Schedule,
+        // 'shedule' is the spelling the command was first asked for as; kept as
+        // an alias so that the misspelling keeps working.
+        "shedule" => UtuCommand.Schedule,
         "upload" => UtuCommand.Upload,
         _ => throw new UtuException($"unknown command '{name}'; run 'utu help'", UsageExitCode),
     };

@@ -1,6 +1,5 @@
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
-using Google.Apis.Util.Store;
 using Google.Apis.YouTube.v3;
 using Utu.Configuration;
 using Utu.Core;
@@ -12,7 +11,8 @@ namespace Utu.YouTubeApi;
 /// </summary>
 /// <remarks>
 /// The OAuth client secrets are supplied by the user; no secrets are stored in
-/// the repository. The resulting token is cached in the folder configured by
+/// the repository. The resulting token is cached, protected with the Windows data
+/// protection API, in the folder configured by
 /// <see cref="ChannelSettings.TokenCacheDirectory" />.
 /// </remarks>
 public static class GoogleAuthorization
@@ -52,14 +52,7 @@ public static class GoogleAuthorization
         Action<string>? beforeInteractiveLogin = null,
         CancellationToken cancellationToken = default)
     {
-        var secretsPath = channel.ClientSecretsFile;
-        if (!File.Exists(secretsPath))
-        {
-            throw new UtuException(
-                $"OAuth client secrets not found: {secretsPath}{Environment.NewLine}" +
-                "Create an OAuth client of type 'Desktop app' in the Google Cloud console, " +
-                "download its JSON and store it there.");
-        }
+        var secrets = ClientSecretsFile.Load(channel.ClientSecretsFile);
 
         var tokenDirectory = channel.TokenCacheDirectory;
         Directory.CreateDirectory(tokenDirectory);
@@ -69,26 +62,15 @@ public static class GoogleAuthorization
             beforeInteractiveLogin(tokenDirectory);
         }
 
-        ClientSecrets secrets;
-        try
-        {
-            using var stream = File.OpenRead(secretsPath);
-            secrets = GoogleClientSecrets.FromStream(stream).Secrets;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            throw new UtuException($"Cannot read the OAuth client secrets {secretsPath}: {exception.Message}", 1, exception);
-        }
-
         try
         {
             return await GoogleWebAuthorizationBroker.AuthorizeAsync(
-                    secrets,
-                    Scopes,
-                    channel.User,
-                    cancellationToken,
-                    new FileDataStore(tokenDirectory, fullPath: true),
-                    codeReceiver: null)
+                secrets,
+                Scopes,
+                channel.User,
+                cancellationToken,
+                new ProtectedTokenStore(tokenDirectory),
+                codeReceiver: null)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

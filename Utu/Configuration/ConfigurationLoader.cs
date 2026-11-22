@@ -8,6 +8,12 @@ public sealed class LoadedConfiguration
     /// <summary>Absolute path of the folder configuration that was read.</summary>
     public required string ConfigPath { get; init; }
 
+    /// <summary>
+    /// The folder configuration as it was read, without the global layer. A
+    /// missing file yields an empty configuration.
+    /// </summary>
+    public required UtuConfig FolderConfig { get; init; }
+
     /// <summary>Absolute path of the global configuration, when one was read.</summary>
     public string? GlobalPath { get; init; }
 
@@ -73,12 +79,17 @@ public static class ConfigurationLoader
         var global = globalPath is null ? null : ConfigIO.Load(globalPath);
         var globalFolder = globalPath is null ? null : Path.GetDirectoryName(globalPath);
 
+        // The built in paths (client secrets, token cache) live in the .utu folder of
+        // the user even when a folder configuration is used on its own with --config.
+        var utuFolder = Path.GetDirectoryName(GlobalConfigPath(homeFolder, overrideFolder));
+
         return new LoadedConfiguration
         {
             ConfigPath = configPath,
+            FolderConfig = folder,
             GlobalPath = globalPath,
             GlobalFolder = globalFolder,
-            Resolved = ResolvedConfiguration.Resolve(root, folder, global, globalFolder),
+            Resolved = ResolvedConfiguration.Resolve(root, folder, global, globalFolder, utuFolder),
         };
     }
 

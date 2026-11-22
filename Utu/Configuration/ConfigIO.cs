@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Utu.Configuration;
 
@@ -21,6 +23,15 @@ public static class ConfigIO
         {
             new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
         },
+    };
+
+    /// <summary>
+    /// Serializer options that keep unset values, so that a template can name a
+    /// setting with a placeholder instead of dropping it.
+    /// </summary>
+    public static JsonSerializerOptions PlaceholderOptions { get; } = new(Options)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
     /// <summary>Parses a configuration document.</summary>
@@ -67,8 +78,53 @@ public static class ConfigIO
     public static string Serialize(UtuConfig config) =>
         JsonSerializer.Serialize(config, Options);
 
+    /// <summary>
+    /// Serializes a folder configuration whose <c>defaults</c> name every setting
+    /// utu understands, using <see langword="null" /> for the values that are not
+    /// set. Video entries keep only the values they define.
+    /// </summary>
+    public static string SerializeWithPlaceholders(UtuConfig config)
+    {
+        if (JsonSerializer.SerializeToNode(config, PlaceholderOptions) is not JsonObject document)
+        {
+            return JsonSerializer.Serialize(config, PlaceholderOptions);
+        }
+
+        if (document["channel"] is JsonObject channel)
+        {
+            RemoveUnset(channel);
+        }
+
+        if (document["videos"] is JsonArray videos)
+        {
+            foreach (var video in videos.OfType<JsonObject>())
+            {
+                RemoveUnset(video);
+            }
+        }
+
+        return document.ToJsonString(PlaceholderOptions);
+    }
+
     /// <summary>Writes a configuration document.</summary>
-    public static void Save(string path, UtuConfig config)
+    public static void Save(string path, UtuConfig config) => Write(path, Serialize(config));
+
+    /// <summary>Writes a folder configuration with placeholders for unset settings.</summary>
+    public static void SaveWithPlaceholders(string path, UtuConfig config) =>
+        Write(path, SerializeWithPlaceholders(config));
+
+    private static void RemoveUnset(JsonObject element)
+    {
+        foreach (var name in element
+            .Where(property => property.Value is null)
+            .Select(property => property.Key)
+            .ToList())
+        {
+            element.Remove(name);
+        }
+    }
+
+    private static void Write(string path, string json)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
@@ -76,6 +132,6 @@ public static class ConfigIO
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(path, Serialize(config) + Environment.NewLine);
+        File.WriteAllText(path, json + Environment.NewLine);
     }
 }

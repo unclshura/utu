@@ -9,6 +9,9 @@ public enum UtuCommand
     /// <summary>Create or extend <c>utu.json</c>.</summary>
     Init,
 
+    /// <summary>Recompute the publication times from <c>publishSchedule</c>.</summary>
+    Schedule,
+
     /// <summary>Upload the videos of <c>utu.json</c>.</summary>
     Upload,
 }

@@ -22,21 +22,32 @@ public static class InitCommand
                 CommandLineParser.UsageExitCode);
         }
 
-        var defaults = new InitOptions
-        {
-            Recursive = line.Recursive,
-            Force = line.Force,
-            Category = category is null ? "Music" : category,
-        };
-
         ui.Heading("utu init");
         ui.Info($"folder: {root}");
         ui.Info($"configuration: {configPath}");
 
+        var globalConfigPath = ConfigurationLoader.GlobalConfigPath();
+        var createdGlobal = !SamePath(globalConfigPath, configPath) &&
+            GlobalConfiguration.EnsureExists(globalConfigPath);
+
         var globalPath = ConfigurationLoader.FindGlobalConfig(configPath, line.ConfigFile);
-        ui.Info(globalPath is null
-            ? $"global: none; '{ConfigurationLoader.GlobalConfigPath()}' is used for channel and default settings"
-            : $"global: {globalPath} (channel and defaults are inherited from it)");
+        if (createdGlobal)
+        {
+            ui.Info($"global: created '{globalConfigPath}' with all settings and their built in values");
+            ui.Detail("channel settings and default video parameters are inherited from it; empty values mean 'use the built in default'");
+        }
+        else if (globalPath is not null)
+        {
+            ui.Info($"global: {globalPath} (channel and defaults are inherited from it)");
+        }
+        else if (!string.IsNullOrWhiteSpace(line.ConfigFile))
+        {
+            ui.Info($"global: '{globalConfigPath}' is not used because '--config' names an exact file");
+        }
+        else
+        {
+            ui.Info($"global: none; '{globalConfigPath}' is used for channel and default settings");
+        }
 
         UtuConfig? existing = null;
         if (File.Exists(configPath) && !line.Force)
@@ -45,23 +56,35 @@ public static class InitCommand
             ui.Info("adding to the existing configuration");
         }
 
+        var globalConfig = globalPath is null ? null : ConfigIO.Load(globalPath);
+        var resolved = ResolvedConfiguration.Resolve(
+            root,
+            existing ?? new UtuConfig(),
+            globalConfig,
+            globalPath is null ? null : Path.GetDirectoryName(globalPath));
+
+        var defaults = new InitOptions
+        {
+            Recursive = line.Recursive,
+            Force = line.Force,
+            Category = category,
+            PublishSchedule = resolved.PublishSchedule,
+        };
+
         var result = ConfigInitializer.Create(root, existing, defaults);
-        ConfigIO.Save(configPath, result.Config);
+        ConfigIO.SaveWithPlaceholders(configPath, result.Config);
 
         if (globalPath is not null)
         {
-            var resolved = ResolvedConfiguration.Resolve(
-                root,
-                result.Config,
-                ConfigIO.Load(globalPath),
-                Path.GetDirectoryName(globalPath));
-
             ui.Detail($"channel: {(resolved.Channel.Name ?? "(unnamed)")}, {resolved.Channel.ParallelUploads} parallel uploads");
+            ui.Detail($"client secrets: {resolved.Channel.ClientSecretsFile}");
             ui.Detail($"token cache: {resolved.Channel.TokenCacheDirectory}");
         }
 
         WriteEntries(ui, "Videos", result.Added, verboseOnly: false);
         WriteEntries(ui, "Already configured", result.Kept, verboseOnly: true);
+
+        WriteSchedule(ui, resolved, result.Config.Videos);
 
         foreach (var file in result.MissingFiles)
         {
@@ -80,8 +103,35 @@ public static class InitCommand
         }
 
         ui.Info("Edit the titles, descriptions and thumbnails, then run 'utu upload'.");
+        ui.Info("the 'defaults' block of the file names every setting: null means 'inherit', a value applies to every video");
+
+        if (createdGlobal)
+        {
+            ui.Info($"Edit '{globalConfigPath}' to change the channel and the default video parameters.");
+        }
 
         return 0;
+    }
+
+    private static bool SamePath(string first, string second) =>
+        string.Equals(Path.GetFullPath(first), Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Reports the publication times the schedule produced.</summary>
+    private static void WriteSchedule(ConsoleUi ui, ResolvedConfiguration resolved, IReadOnlyList<VideoEntry> videos)
+    {
+        if (string.IsNullOrWhiteSpace(resolved.PublishSchedule))
+        {
+            return;
+        }
+
+        ReportWriter.WriteSchedule(ui, resolved.PublishSchedule, videos);
+
+        // YouTube only accepts a publication time on a private video; a public or
+        // unlisted video with a publication time is rejected at upload.
+        if (SettingsResolver.Resolve(new VideoEntry(), resolved.Defaults).Privacy is not Privacy.Private)
+        {
+            ui.Warning("a publication time needs 'privacy: private' in the defaults; YouTube rejects the video otherwise");
+        }
     }
 
     private static void WriteEntries(ConsoleUi ui, string title, IReadOnlyList<InitEntry> entries, bool verboseOnly)

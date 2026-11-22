@@ -16,6 +16,9 @@ public static class UtuApp
             case UtuCommand.Init:
                 return InitCommand.Run(line, ui);
 
+            case UtuCommand.Schedule:
+                return ScheduleCommand.Run(line, ui);
+
             case UtuCommand.Upload:
                 return await UploadCommand.RunAsync(line, ui, cancellationToken).ConfigureAwait(false);
 

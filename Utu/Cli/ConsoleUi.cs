@@ -5,13 +5,16 @@ namespace Utu.Cli;
 /// <summary>Colourful console output.</summary>
 public sealed class ConsoleUi
 {
+    private readonly IAnsiConsole _console;
     private readonly bool _color;
     private readonly bool _verbose;
 
     /// <param name="noColor">Disable colours and markup.</param>
     /// <param name="verbose">Print details.</param>
-    public ConsoleUi(bool noColor = false, bool verbose = false)
+    /// <param name="console">The console to write to; defaults to the system console.</param>
+    public ConsoleUi(bool noColor = false, bool verbose = false, IAnsiConsole? console = null)
     {
+        _console = console ?? AnsiConsole.Console;
         _color = !noColor;
         _verbose = verbose;
     }
@@ -27,31 +30,31 @@ public sealed class ConsoleUi
     {
         if (_color)
         {
-            AnsiConsole.MarkupLine(markup);
+            _console.MarkupLine(markup);
         }
         else
         {
-            AnsiConsole.WriteLine(Spectre.Console.Markup.Remove(markup));
+            _console.WriteLine(Spectre.Console.Markup.Remove(markup));
         }
     }
 
     /// <summary>Writes plain text.</summary>
-    public void Plain(string text) => AnsiConsole.WriteLine(text);
+    public void Plain(string text) => _console.WriteLine(text);
 
     /// <summary>Writes an empty line.</summary>
-    public void Blank() => AnsiConsole.WriteLine();
+    public void Blank() => _console.WriteLine();
 
     /// <summary>Writes a heading.</summary>
     public void Heading(string text)
     {
         if (_color)
         {
-            AnsiConsole.Write(new Rule($"[bold deepskyblue1]{Spectre.Console.Markup.Escape(text)}[/]").LeftJustified());
+            _console.Write(new Rule($"[bold deepskyblue1]{Spectre.Console.Markup.Escape(text)}[/]").LeftJustified());
         }
         else
         {
-            AnsiConsole.WriteLine(text);
-            AnsiConsole.WriteLine(new string('-', Math.Min(Math.Max(text.Length, 3), 60)));
+            _console.WriteLine(text);
+            _console.WriteLine(new string('-', Math.Min(Math.Max(text.Length, 3), 60)));
         }
     }
 
@@ -79,6 +82,15 @@ public sealed class ConsoleUi
         }
     }
 
-    /// <summary>Writes a table.</summary>
-    public void Write(Table table) => AnsiConsole.Write(table);
+    /// <summary>Writes a table, one cell narrower than the console.</summary>
+    /// <remarks>
+    /// A table as wide as the console leaves the cursor in its last cell, so the
+    /// terminal wraps and adds an empty line below the table.
+    /// </remarks>
+    public void Write(Table table)
+    {
+        var width = _console.Profile.Width;
+
+        _console.Write(width > 1 ? table.Width(width - 1) : table);
+    }
 }
